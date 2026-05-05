@@ -40,11 +40,6 @@ async function run() {
 
         const stream = client.query(query);
 
-        // const result = await client.query(
-        //   'SELECT x, random() as y FROM generate_series($1::int, $2::int) as x',
-        //   [offset + 1, offset + Math.ceil(size)]
-        // );
-
         for await (const row of stream) {
           yield { x: row.x, y: row.y };
         }
