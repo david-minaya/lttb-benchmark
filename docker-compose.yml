@@ -1,0 +1,95 @@
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.53.5
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9095:9090"
+
+  grafana:
+    image: grafana/grafana:13.0.1
+    attach: false
+    ports:
+      - "3015:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    env_file: .env
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/lttb-benchmark.json
+
+  postgres:
+    image: postgres:17.9-alpine
+    env_file: .env
+    depends_on:
+      - prometheus
+      - grafana
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      interval: 1s
+      retries: 10
+      start_period: 10s
+      timeout: 10s
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.19.1
+    env_file: .env
+    environment:
+      DATA_SOURCE_NAME: "${DB_URL}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  lttb-js:
+    build: ./benchmarks/lttb-js
+    env_file: .env
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  lttb-stream-js:
+    build: ./benchmarks/lttb-stream-js
+    env_file: .env
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  downsample-js:
+    build: ./benchmarks/downsample-js
+    env_file: .env
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  lttb-py:
+    build: ./benchmarks/lttb-py
+    env_file: .env
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  grafana-data:
